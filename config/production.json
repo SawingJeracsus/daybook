@@ -1,0 +1,6 @@
+{
+    "port": 5000,
+    "jwtSecret": "popkorn_lover_3000",
+    "mongoUri": "mongodb+srv://root:root@cluster0.4gb9e.azure.mongodb.net/app?retryWrites=true&w=majority",
+    "baseUrl": "http://localhost:5000"
+}

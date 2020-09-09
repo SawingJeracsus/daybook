@@ -1,0 +1,23 @@
+{
+  "name": "lesons-reminder",
+  "version": "1.0.0",
+  "description": "That like daybook, but better!",
+  "main": "index.js",
+  "scripts": {
+    "start": "node app.js",
+    "server": "nodemon app.js",
+    "telegram": "nodemon bot_telegram.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "mongoose": "^5.10.3",
+    "redux": "^4.0.5",
+    "telegraf": "^3.38.0"
+  },
+  "devDependencies": {
+    "config": "^3.3.1",
+    "nodemon": "^2.0.4"
+  }
+}
