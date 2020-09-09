@@ -3,7 +3,9 @@ const config = require('config')
 const mongoose = require('mongoose')
 const Lesson = require('./models/Lesson')
 const Homework = require('./models/Homework')
-const { text } = require('express')
+const Group = require('./models/Group')
+const User = require('./models/User')
+// const { text } = require('express')
 
 const PORT = config.get('port')
 
@@ -25,7 +27,7 @@ const start = async () => {
 
 
         const appState = {
-            listenOf: null
+            listenOf: null,
         }
         const LESON = "LESON"
         const CONFIRM_LESSON = "CONFIRM_LESSON"
@@ -36,11 +38,54 @@ const start = async () => {
         const LESSON_DONE = "LESSON_DONE"
         const HW_DONE = "HW_DONE"
         const CONFIRM_HW_DONE = "CONFIRM_HW_DONE"
+        const GROUP_NAME = "GROUP_NAME"
+        const GROUP_NAME_CREATE = "GROUP_NAME_CREATE"
+        const ADD_TO_GROUP = "ADD_TO_GROUP"
+        const CODE_REQUIRE = "CODE_REQUIRE"
 
 
         const bot = new Telegraf(config.get('token'))
-        bot.start((ctx) => ctx.reply('Welcome!'))
+        bot.use(async (ctx, next) => {
+            const id = ctx.message.from.id
+            const user = await User.findOne( {tel_id: id} )
+            if(user.length !== 0){
+                if(user.using !== "__self"){
+                    ctx.message.from.id = await Group.findOne({ name: user.using })
+                    ctx.message.from.id = ctx.message.from.id.code
+                    // console.log(ctx.message.from.id.code,  await Group.findOne({ name: user.using }).code);                    
+                }
+            }
+            ctx.user = user
+            
+            next()
+        })
+
+        bot.start( async (ctx) => {
+            ctx.reply('Welcome!')
+            const user = new User({
+                tel_id: ctx.message.from.id
+            })
+            user.save()
+        })
         bot.help((ctx) => ctx.reply('Send me a sticker'))
+
+        bot.command('creategroup', ctx => {
+            ctx.reply("Ок, введіть назву...")
+            appState.listenOf = GROUP_NAME
+        } )
+        bot.command("usegroup", async ctx => {
+            ctx.reply("Введіть ім'я групи: ")
+            appState.listenOf = ADD_TO_GROUP
+        })
+        bot.command("leave", async ctx => {
+            ctx.reply("Ви покидаєте групу "+ctx.user.using)
+            ctx.user.using = '__self'
+            ctx.user.save()
+        })
+        bot.hears( 'id', ctx=> {
+            ctx.reply(ctx.message.from.id)
+            console.log(ctx.message.from.id)
+        } )
 
         bot.command('addlesson', ({ reply }) => {
             reply('Ок, тоді напиши що це за урок!')
@@ -122,6 +167,8 @@ const start = async () => {
       }
 
         bot.on('text', async (ctx) => {
+            // console.log(ctx.message.from.id, ctx.user.tel_id);
+            
             switch (appState.listenOf) {
                 case LESON:
                     ctx.reply("Ви впевнені що хочете добавити урок: "+ctx.message.text+"?")
@@ -130,6 +177,8 @@ const start = async () => {
                     appState.lastLesson = ctx.message.text
                 break;
                 case CONFIRM_LESSON:
+            console.log(ctx.message.from.id, ctx.user.tel_id);
+
                     if(ctx.message.text == OK){
                         const lesson = new Lesson({
                             lesson: appState.lastLesson,
@@ -213,9 +262,65 @@ const start = async () => {
                         appState.listenOf = null
                     } 
                 break;
+                case GROUP_NAME:
+                    ctx.reply("Ви впевнені створити групу з такою назвою: " + ctx.message.text, confirmMenu) 
+                    appState.groupName = ctx.message.text                   
+                    appState.listenOf = GROUP_NAME_CREATE
+                break;
+                case GROUP_NAME_CREATE:
+                    if(ctx.message.text == OK){
+                        const code = Math.floor(Math.random() * 10000);
+
+                        const group = new Group({
+                            owner: ctx.message.from.id,
+                            users: [ctx.message.from.id],
+                            code,
+                            name: appState.groupName 
+                        })
+                        group.save()
+                        ctx.reply(`Група збережена! Ваш код: ${code} Тепер ви можете уввійти в групу (/usegroup)`)
+                        appState.groupCode = code
+                        appState.listenOf = null
+                    }else{
+                        ctx.reply("Ок, відміняю останю дію")
+                        appState.listenOf = null
+                    } 
+                break;
+                case ADD_TO_GROUP:
+                    const name = ctx.message.text
+                    ctx.reply("Шукаю")
+                        group = await Group.findOne({ name })
+                    if(group.lentgh !== 0){
+                        ctx.reply(`Введіть пароль (код) групи ${name}: `)
+                        appState.lastGroup = group
+                        appState.listenOf = CODE_REQUIRE
+                    }else{
+                        ctx.reply('Я не знайшов групи з такою назвою')
+                    }
+                break;
+                case CODE_REQUIRE:
+                    if(  appState.lastGroup.code == ctx.message.text ){
+                        // ctx.reply(' Все вірно, зараз добавляю... ')
+                        appState.lastGroup.users.push( ctx.message.from.id )
+                        appState.lastGroup.users = [...new Set(appState.lastGroup.users)]
+                        try {
+                            ctx.user.using = appState.lastGroup.name
+                            ctx.user.save()
+                            appState.lastGroup.save()
+                        } catch (e) {
+                            ctx.reply("Мені не вдалось записати вас до групи")
+                            console.log(e.message)
+                            return
+                        }    
+                        ctx.reply('Все супер, ти в групі')
+
+                    }else{
+                        ctx.reply('Невірний код')
+                    }
+                break;
                 default:
                     ctx.reply("Я зараз чекаю команд!")
-                    break;
+                break;
             } 
           })
         bot.launch()
