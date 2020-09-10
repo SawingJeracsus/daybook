@@ -70,7 +70,7 @@ const start = async () => {
         })
 
         bot.start( async (ctx) => {
-            ctx.reply('Welcome!')
+            ctx.reply('Привіт!\n Я створений для того щоб пам\'ятати твою домашку ЗАМІСТЬ тебе.\n\n Також ти можеш створити групу де всі твої однокласники сможуть користуватися одним списком\n\n ознайомитися з всіма командами ти можеш ввівши /help  ')
             const oldAccoutnt = await User.findOne({ tel_id: ctx.message.from.id })
             if(!oldAccoutnt || oldAccoutnt?.length == 0){
                 const user = new User({
@@ -81,7 +81,22 @@ const start = async () => {
             
             
         })
-        bot.help((ctx) => ctx.reply('Send me a sticker'))
+        bot.help((ctx) => ctx.reply(`
+Мої команди:
+
+Список Завдань:
+-addlesson - Добавити урок у свій список
+-lessons   - переглянути список твоїх уроків
+-addhw     - добавити в список домашнє завдання
+-hw        - переглянути список з домашнім завданням
+-done      - дозволяє відмітити завдання, як готове
+
+
+Групи:
+-creategroup - дозволяє створити групу
+-usegroup    - дозволяє уввійти в групу
+-leave       - дозволяє покинути групу
+        `))
 
         bot.command('creategroup', ctx => {
             ctx.reply("Ок, введіть назву...")
