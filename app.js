@@ -26,7 +26,7 @@ const start = async () => {
         const { Telegraf } = require('telegraf')
 
 
-        const appState = {
+        let appState = {
             listenOf: null,
         }
         const LESON = "LESON"
@@ -48,24 +48,38 @@ const start = async () => {
         bot.use(async (ctx, next) => {
             const id = ctx.message.from.id
             const user = await User.findOne( {tel_id: id} )
-            if(user.length !== 0){
+            if(user && user.length !== 0){
                 if(user.using !== "__self"){
                     ctx.message.from.id = await Group.findOne({ name: user.using })
-                    ctx.message.from.id = ctx.message.from.id.code
-                    // console.log(ctx.message.from.id.code,  await Group.findOne({ name: user.using }).code);                    
+                    ctx.message.from.id = ctx.message.from.id.code              
                 }
             }
-            ctx.user = user
+            if(user){
+                ctx.user = user
+                appState = user.appState
+            }
             
-            next()
+
+            await next()
+            const user_refreshed = await User.findOne( {tel_id: id} )
+            if(user){
+                user_refreshed.appState = appState
+                await user_refreshed.save()
+            }
+
         })
 
         bot.start( async (ctx) => {
             ctx.reply('Welcome!')
-            const user = new User({
-                tel_id: ctx.message.from.id
-            })
-            user.save()
+            const oldAccoutnt = await User.findOne({ tel_id: ctx.message.from.id })
+            if(!oldAccoutnt || oldAccoutnt?.length == 0){
+                const user = new User({
+                    tel_id: ctx.message.from.id
+                })
+                user.save()
+            }
+            
+            
         })
         bot.help((ctx) => ctx.reply('Send me a sticker'))
 
@@ -84,7 +98,7 @@ const start = async () => {
         })
         bot.hears( 'id', ctx=> {
             ctx.reply(ctx.message.from.id)
-            console.log(ctx.message.from.id)
+            console.log(ctx.message.from.id, appState)
         } )
 
         bot.command('addlesson', ({ reply }) => {
@@ -177,7 +191,6 @@ const start = async () => {
                     appState.lastLesson = ctx.message.text
                 break;
                 case CONFIRM_LESSON:
-            console.log(ctx.message.from.id, ctx.user.tel_id);
 
                     if(ctx.message.text == OK){
                         const lesson = new Lesson({
@@ -187,7 +200,7 @@ const start = async () => {
                         try {
                             await lesson.save()
                         } catch (e) {
-                            console.log(e)
+                            console.log(e.message)
                             ctx.reply("Не вдалось зберегти урок в базу даних, перевірте правильність написання")
                             return
                         }
@@ -218,7 +231,7 @@ const start = async () => {
                         try {
                             await howework.save()
                         } catch (e) {
-                            console.log(e)
+                            console.log(e.message)
                             ctx.reply("Не вдалось зберегти завдання в базу даних, перевірте правильність написання")
                             return
                         }
@@ -251,7 +264,7 @@ const start = async () => {
                         try {
                             await homework.save()
                         } catch (e) {
-                            console.log(e)
+                            console.log(e. message)
                             ctx.reply("Не вдалось оновити завдання в базі даних, перевірте правильність написання")
                             return
                         }
@@ -290,7 +303,7 @@ const start = async () => {
                     const name = ctx.message.text
                     ctx.reply("Шукаю")
                         group = await Group.findOne({ name })
-                    if(group.lentgh !== 0){
+                    if(group && group.lentgh !== 0){
                         ctx.reply(`Введіть пароль (код) групи ${name}: `)
                         appState.lastGroup = group
                         appState.listenOf = CODE_REQUIRE
@@ -301,12 +314,15 @@ const start = async () => {
                 case CODE_REQUIRE:
                     if(  appState.lastGroup.code == ctx.message.text ){
                         // ctx.reply(' Все вірно, зараз добавляю... ')
-                        appState.lastGroup.users.push( ctx.message.from.id )
-                        appState.lastGroup.users = [...new Set(appState.lastGroup.users)]
+                        const groupChanged = await Group.findById(appState.lastGroup._id)
+                        // console.log(groupChanged)
+                        groupChanged.users.push( ctx.message.from.id )
+                        groupChanged.users = [...new Set(appState.lastGroup.users)]
                         try {
                             ctx.user.using = appState.lastGroup.name
-                            ctx.user.save()
-                            appState.lastGroup.save()
+                            await ctx.user.save()
+                            await groupChanged.save()
+                            
                         } catch (e) {
                             ctx.reply("Мені не вдалось записати вас до групи")
                             console.log(e.message)

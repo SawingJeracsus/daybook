@@ -3,7 +3,8 @@ const { Schema, model, Types } = require ('mongoose')
 const shema = new Schema({
     tel_id: {
         type: Number,
-        required: true
+        required: true,
+        unique: true
     },
     using: {
         type: String,
