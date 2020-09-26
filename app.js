@@ -1,13 +1,20 @@
 const express = require('express')
 const config = require('config')
+const axios = require('axios')
+const path = require('path')
+const fs = require('fs');
+const imgur = require('imgur');
 const mongoose = require('mongoose')
+const FormData = require('form-data');
 const Lesson = require('./models/Lesson')
 const Homework = require('./models/Homework')
 const Group = require('./models/Group')
-const User = require('./models/User')
+const User = require('./models/User');
+const c = require('config');
 // const { text } = require('express')
-
 const PORT = config.get('port')
+imgur.setClientId('dd7aa97e9e366db');
+imgur.setAPIUrl('https://api.imgur.com/3/');    
 
 const app = express()
 console.log('server starting...')
@@ -42,6 +49,10 @@ const start = async () => {
         const GROUP_NAME_CREATE = "GROUP_NAME_CREATE"
         const ADD_TO_GROUP = "ADD_TO_GROUP"
         const CODE_REQUIRE = "CODE_REQUIRE"
+        const SOLUTION = "SOLUTION"
+        const SOLUTION_LESSON_SELECT = 'SOLUTION_LESSON_SELECT'
+        const CONFIRM_SOLUTION = 'CONFIRM_SOLUTION'
+        const SOLUTION_HW_SELECT = 'SOLUTION_HW_SELECT'
 
 
         const bot = new Telegraf(config.get('token'))
@@ -69,6 +80,7 @@ const start = async () => {
 
         })
 
+
         bot.start( async (ctx) => {
             ctx.reply('Привіт!\n Я створений для того щоб пам\'ятати твою домашку ЗАМІСТЬ тебе.\n\n Також ти можеш створити групу де всі твої однокласники сможуть користуватися одним списком\n\n ознайомитися з всіма командами ти можеш ввівши /help  ')
             const oldAccoutnt = await User.findOne({ tel_id: ctx.message.from.id })
@@ -85,17 +97,17 @@ const start = async () => {
 Мої команди:
 
 Список Завдань:
--addlesson - Добавити урок у свій список
--lessons   - переглянути список твоїх уроків
--addhw     - добавити в список домашнє завдання
--hw        - переглянути список з домашнім завданням
--done      - дозволяє відмітити завдання, як готове
+/addlesson - Добавити урок у свій список
+/lessons   - переглянути список твоїх уроків
+/addhw     - добавити в список домашнє завдання
+/hw        - переглянути список з домашнім завданням
+/done      - дозволяє відмітити завдання, як готове
 
 
 Групи:
--creategroup - дозволяє створити групу
--usegroup    - дозволяє уввійти в групу
--leave       - дозволяє покинути групу
+/creategroup - дозволяє створити групу
+/usegroup    - дозволяє уввійти в групу
+/leave       - дозволяє покинути групу
         `))
 
         bot.command('creategroup', ctx => {
@@ -111,10 +123,20 @@ const start = async () => {
             ctx.user.using = '__self'
             ctx.user.save()
         })
-        bot.hears( 'id', ctx=> {
-            ctx.reply(ctx.message.from.id)
-            console.log(ctx.message.from.id, appState)
-        } )
+
+        bot.command("addsol", async ctx => {
+            appState.solutionsLinks = []
+            appState.solutionsTips  = []
+            ctx.reply("Введіть рішення або надішліть зображення з ним: ")
+            appState.listenOf = SOLUTION
+        })
+
+        // bot.hears( 'id', async ctx => {
+        //     // console.log( user_refreshed )
+
+        //     ctx.reply(ctx.message.from.id)
+        //     console.log(ctx.message.from.id, appState)
+        // } ) // COMENT IN ENTERPRISE!!!!
 
         bot.command('addlesson', ({ reply }) => {
             reply('Ок, тоді напиши що це за урок!')
@@ -154,12 +176,38 @@ const start = async () => {
                 const hwList = replyData[lesson].map( hw_item => hw_item.homework ).join(' ; ')
                 text += `${lesson}: ${hwList} \n`
             }
+
             ctx.reply(text)
 
             }else{
                 ctx.reply('Все готово козаче!')
             }
             
+        })
+
+        bot.command('sol', async ctx => {
+            const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
+            const hwWithSolutions = hw.filter( hw_item => hw_item.solutions?.exist )
+            let text = ''
+            console.log(hw)
+
+            if(hwWithSolutions.length > 0){
+                hwWithSolutions.forEach( hw_item => {
+                    let links = hw_item.solutions.links.join(' ')
+                    let tips  = hw_item.solutions.tips.join(' ; ')
+    
+                    text += `${hw_item.lesson} : ${hw_item.homework}: 
+    ${links}
+    
+    ${tips}                
+    `
+                } )
+
+                ctx.reply(text) 
+            }else{
+                ctx.reply('Ще ніхто не добавив рішення')
+            }
+               
         })
         bot.command('done', async ctx => {
             const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
@@ -195,8 +243,7 @@ const start = async () => {
         } )).resize())
       }
 
-        bot.on('text', async (ctx) => {
-            // console.log(ctx.message.from.id, ctx.user.tel_id);
+        bot.on('message', async (ctx) => {
             
             switch (appState.listenOf) {
                 case LESON:
@@ -323,14 +370,13 @@ const start = async () => {
                         appState.lastGroup = group
                         appState.listenOf = CODE_REQUIRE
                     }else{
-                        ctx.reply('Я не знайшов групи з такою назвою')
+                        ctx.reply('Я не знайшов групи з такою назвою, відміняю процес вступання у групу')
+                        appState.listenOf = null
                     }
                 break;
                 case CODE_REQUIRE:
                     if(  appState.lastGroup.code == ctx.message.text ){
-                        // ctx.reply(' Все вірно, зараз добавляю... ')
                         const groupChanged = await Group.findById(appState.lastGroup._id)
-                        // console.log(groupChanged)
                         groupChanged.users.push( ctx.message.from.id )
                         groupChanged.users = [...new Set(appState.lastGroup.users)]
                         try {
@@ -347,6 +393,93 @@ const start = async () => {
 
                     }else{
                         ctx.reply('Невірний код')
+                        appState.listenOf = null
+                    }
+                break;
+                case SOLUTION:
+                    if(ctx.message.photo?.length !== 0 && ctx.message.photo){
+                        //image 
+                        const imageName = `${Math.floor(1000 * Math.random())}.jpg`
+                        const url = await ctx.telegram.getFileLink(ctx.message.photo[0].file_id)
+                        const response = await axios({url, responseType: 'stream'})
+                        await new Promise((resolve, reject) => {
+                            response.data.pipe(fs.createWriteStream(path.resolve(`./temp/images/${imageName}`)))
+                                        .on('finish', () => {
+                                            fs.readFile(path.resolve(`./temp/images/${imageName}`), (error, file) => {
+                                                if (error){
+                                                    ctx.reply("Шось поломаний у тебе якийсь файл...")
+                                                }else{
+                                                    imgur.uploadFile(`./temp/images/${imageName}`)
+                                                    .then(async function (json) {
+                                                        appState.solutionsLinks.push(json.data.link)
+                                                        fs.unlinkSync(`./temp/images/${imageName}`)
+                                                        resolve()
+                                                    })
+                                                    .catch(function (err) {
+                                                        ctx.reply('Imgur обідився на мене, скори ми все порішаєм')
+                                                        console.error(err.message);
+                                                        reject()
+                                                    });    
+                                                }
+                                            })
+                                            
+                                        })
+                                        .on('error', e => {
+                                            ctx.reply('Телеграм мені не віддає картинку!')
+                                            console.log(e, e.message)
+                                        })
+                                }); 
+                        
+                    }else{
+                        //text
+                        appState.solutionsTips.push(ctx.message.text)
+                    }
+                    const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
+
+                    ctx.reply('Ок, для якого задання з якого предмету це рішення?', lessonsMenu)
+
+                    appState.listenOf = SOLUTION_LESSON_SELECT 
+                break;
+                case SOLUTION_LESSON_SELECT:
+                    appState.solutionLesson = ctx.message.text
+                    const homeworkSolMenu = await getHomeWorkMenu(ctx.message.from.id, ctx.message.text)
+
+                    ctx.reply('Ок, тепер оберіть домашнє завдання', homeworkSolMenu)
+
+                    appState.listenOf = SOLUTION_HW_SELECT 
+                break;
+                case SOLUTION_HW_SELECT:
+                    appState.hwSolution = ctx.message.text
+                    ctx.reply("Ок, підтвердіть дію!", confirmMenu)
+
+                    appState.listenOf  = CONFIRM_SOLUTION           
+                break;
+                case CONFIRM_SOLUTION:
+                    if(ctx.message.text == OK){
+                        const homework = await Homework.findOne({
+                            lesson: appState.solutionLesson,
+                            homework: appState.hwSolution,
+                            owner: ctx.message.from.id
+                        })  
+                        homework.solutions = {
+                            links: homework.solutions.links ? [...homework.solutions.links, ...appState.solutionsLinks]: [...appState.solutionsLinks],
+                            tips:  homework.solutions.tips  ? [...homework.solutions.tips, ...appState.solutionsTips]  : [...appState.solutionsTips]
+                        }
+                        homework.solutions.exist = true
+
+                        try {
+                            console.log(homework)
+                            await homework.save() 
+                        } catch (e) {
+                            console.log(e. message)
+                            ctx.reply("Не вдалось оновити завдання в базі даних, перевірте правильність написання")
+                            return
+                        }
+                        ctx.reply("Я додав твоє рішення!")
+
+                    }else{
+                        ctx.reply("Ок, відміняю останю дію")
+                        appState.listenOf = null
                     }
                 break;
                 default:

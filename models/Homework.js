@@ -16,6 +16,10 @@ const shema = new Schema({
     is_done: {
         type: Boolean,
         default: false
+    },
+    solutions: {
+        type: Object,
+        default: {exist: false}
     }
 })
 
