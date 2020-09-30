@@ -69,7 +69,7 @@ const start = async () => {
 
         const bot = new Telegraf(config.get('token'))
         bot.use(async (ctx, next) => {
-            const id = ctx.message.from.id
+            const id = ctx.message.from ? ctx.message.from.id : 918652398
             const user = await User.findOne( {tel_id: id} )
             if(user && user.length !== 0){
                 if(user.using !== "__self"){
@@ -109,27 +109,27 @@ const start = async () => {
 Мої команди:
 
 Список Завдань:
-/addlesson - Добавити урок у свій список
-/lessons   - переглянути список твоїх уроків
-/rmlesson  - видалити предмет зі списку
-/addhw     - добавити в список домашнє завдання
-/hw        - переглянути список з домашнім завданням
-/done      - дозволяє відмітити завдання, як готове
+/addlesson - 📚 Добавити урок у свій список                  
+/lessons   - 📖 переглянути список твоїх уроків 
+/rmlesson  - 🛑 видалити предмет зі списку      
+/addhw     - 🖊️ добавити в список домашнє завдання
+/hw        - 🏠 переглянути список з домашнім завданням 
+/done      - ✔️ дозволяє відмітити завдання, як готове 
 
 
 Групи:
-/creategroup - дозволяє створити групу
-/usegroup    - дозволяє уввійти в групу
-/leave       - дозволяє покинути групу
+/creategroup - 👪 дозволяє створити групу  
+/usegroup    - 🧑‍🤝‍🧑 дозволяє уввійти в групу
+/leave       - 🛑 дозволяє покинути групу
 
 Рішення:
 
-/addsol      - добавити рішення для певного завдання
-/sol         - переглянути всі рішення
+/addsol      - ✔️ добавити рішення для певного завдання
+/sol         - 👀 переглянути всі рішення
         `))
 
         bot.command('creategroup', ctx => {
-            ctx.reply("Ок, введіть назву...")
+            ctx.reply("Ок, введіть назву...🖊️")
             appState.listenOf = GROUP_NAME
         } )
         bot.command("usegroup", async ctx => {
@@ -145,7 +145,7 @@ const start = async () => {
         bot.command("addsol", async ctx => {
             appState.solutionsLinks = []
             appState.solutionsTips  = []
-            ctx.reply("Введіть рішення або надішліть зображення з ним: ")
+            ctx.reply("Введіть рішення🖊️ або надішліть зображення🖼️ з ним: ")
             appState.listenOf = SOLUTION
         })
 
@@ -169,31 +169,38 @@ const start = async () => {
             
         })
         bot.command('creatett', async (ctx) => {
-            ctx.reply(`Ініціюю процес створення розкладу...`)
+            ctx.reply(`Ініціюю процес створення розкладу...🤖`)
             const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
-            ctx.reply(`Оберіть перший урок в понеділок (якщо його немає в списку то ви можете написати його за допомогою клавіатури, а я його сам добавлю у список)`, lessonsMenu)
+            ctx.reply(`Напишіть перший урок у понеділок (якщо його немає в списку то ви можете написати його за допомогою клавіатури, а я його сам добавлю у список)`, lessonsMenu)
             appState.listenOf = TT_CREATE
+            appState.timetableFilled = {}
             appState.timetable = [1,1]
         })
         bot.command('next_day', ctx => {
-            let replyText = ''
-            for(const key in appState.timetableFilled){
-                replyText += TimeTableToDays[key-1]
-                replyText += `: \n ${appState.timetableFilled[key].join(';\n')}`
-            }
-            ctx.reply(replyText)
-            if(appState.timetable[0] <= 7){
-                ctx.reply(`Переходимо до наступного дня...`)
-                appState.timetable[0] += 1
-            }else{
-                ctx.reply("Cписок складено успішно!")
+            // appState.listenOf  = null
+            if(appState.listenOf === TT_CREATE){
+                let replyText = ''
                 console.log(appState.timetableFilled)
+                for(const key in appState.timetableFilled){
+                    replyText += TimeTableToDays[key-1]
+                    replyText += `: \n ${appState.timetableFilled[key].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+                }
+                ctx.reply(replyText)
+                if(appState.timetable[0] <= 7){
+                    ctx.reply(`Переходимо до наступного дня...`)
+                    appState.timetable[0] += 1
+                }else{
+                    ctx.reply("Cписок складено успішно!")
+                    console.log(appState.timetableFilled)
+                }
+            }else{
+                ctx.reply('Проініціалізуйте спочатку процес створення (/creatett)')
             }
         
         })
         bot.command('rmlesson', async ( { reply, message } ) => {
             const lessonsMenu = await getLessonsMenu(message.from.id)
-            reply("Який урок ви бажаєте видалити зі списку?", lessonsMenu)
+            reply("Який урок ви бажаєте видалити зі списку❓", lessonsMenu)
             appState.listenOf = LESSON_DELETE
         })
 
@@ -251,13 +258,13 @@ const start = async () => {
 
                 ctx.reply(text) 
             }else{
-                ctx.reply('Ще ніхто не добавив рішення')
+                ctx.reply('Ще ніхто не добавив рішення😥')
             }
                
         })
         bot.command('done', async ctx => {
             const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
-            ctx.reply('Оберіть урок з якого ви заверли завдання', lessonsMenu)
+            ctx.reply('Оберіть урок з якого ви завершили завдання', lessonsMenu)
             appState.listenOf = LESSON_DONE
         })
 
@@ -269,14 +276,24 @@ const start = async () => {
           ]).resize())
           
           
-      const getLessonsMenu = async owner => {
+      const getLessonsMenu = async (owner, returnList = false) => {
         const lessons = await Lesson.find({ owner })
+        
+        if(!returnList){
+            return Telegraf.Extra
+            .markdown()
+            .markup((m) => m.keyboard(lessons.map( lesson => {
+                return m.callbackButton(lesson.lesson)
+            } )).resize())
+        }else{
+            return [Telegraf.Extra
+                .markdown()
+                .markup((m) => m.keyboard(lessons.map( lesson => {
+                    return m.callbackButton(lesson.lesson)
+                } )).resize()), lessons]
+        }
 
-        return Telegraf.Extra
-        .markdown()
-        .markup((m) => m.keyboard(lessons.map( lesson => {
-            return m.callbackButton(lesson.lesson)
-        } )).resize())
+        
       }
 
       const getHomeWorkMenu = async (owner,lesson) => {
@@ -376,7 +393,7 @@ const start = async () => {
                             ctx.reply("Не вдалось оновити завдання в базі даних, перевірте правильність написання")
                             return
                         }
-                        ctx.reply('Завдання оновлено!')
+                        ctx.reply('Завдання оновлено!✔️')
                         appState.listenOf = null
                     }else{
                         ctx.reply("Ок, відміняю останю дію")
@@ -562,18 +579,36 @@ const start = async () => {
                     let  [day, number] = appState.timetable
                     number += 1
                     appState.timetable[1] = number
-                    const newLessonsMenu = await getLessonsMenu(ctx.message.from.id)
-                    ctx.reply(`Записав... (щоб перейти до наступного дня напишіть /next_day)`, newLessonsMenu)
-                    if(appState.timetableFilled && appState.timetableFilled[day]){
-                        appState.timetableFilled[day].push(ctx.message.text)
-                    } else{
-                        if(!appState.timetableFilled) appState.timetableFilled = {} 
-                        appState.timetableFilled[day] = [ctx.message.text]
-                        // Lesson.findAndModify({
-                        //     lesson: ctx.message.text, 
-                        //     owner: ctx.message.from.id
-                        // })//
-                    }    
+
+                    ctx.reply(number)
+                    const [newLessonsMenu, lessons] = await getLessonsMenu(ctx.message.from.id, true)
+                    appState.timetableFilled[day] = appState.timetableFilled[day] ? [...appState.timetableFilled[day], ctx.message.text] : [ctx.message.text] 
+                    let includes = false
+                    lessons.forEach(lesson => {
+                        if(lesson.lesson == ctx.message.text){
+                            includes = true
+                        }
+                    })
+                    if(!includes){
+                        const lesson = new Lesson({
+                            lesson: ctx.message.text,
+                            owner:  ctx.message.from.id
+                        })
+                        console.log(lessons, includes, ctx.message.text)
+                        lesson.save()
+                    }
+                    // const newLessonsMenu = await getLessonsMenu(ctx.message.from.id)
+                    // ctx.reply(`Записав... (щоб перейти до наступного дня напишіть /next_day)`, newLessonsMenu)
+                    // if(appState.timetableFilled && appState.timetableFilled[day]){
+                    //     appState.timetableFilled[day].push(ctx.message.text)
+                    // } else{
+                    //     if(!appState.timetableFilled) appState.timetableFilled = {} 
+                    //     appState.timetableFilled[day] = [ctx.message.text]
+                    //     // Lesson.findAndModify({
+                    //     //     lesson: ctx.message.text, 
+                    //     //     owner: ctx.message.from.id
+                    //     // })//
+                    // }    
                 break;
                 default:
                     ctx.reply("Я зараз чекаю команд!")
