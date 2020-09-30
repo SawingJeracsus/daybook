@@ -53,7 +53,19 @@ const start = async () => {
         const SOLUTION_LESSON_SELECT = 'SOLUTION_LESSON_SELECT'
         const CONFIRM_SOLUTION = 'CONFIRM_SOLUTION'
         const SOLUTION_HW_SELECT = 'SOLUTION_HW_SELECT'
+        const LESSON_DELETE = 'LESSON_DELETE'
+        const LESSON_DELETE_CONFIRM = 'LESSON_DELETE_CONFIRM'
+        const TT_CREATE = 'TT_CREATE'
 
+        const TimeTableToDays = [
+            "Понеділок",
+            "Вівторок",
+            "Середа",
+            "Четвер",
+            "П'ятниця",
+            "Субота",
+            "Неділя",
+        ]
 
         const bot = new Telegraf(config.get('token'))
         bot.use(async (ctx, next) => {
@@ -99,6 +111,7 @@ const start = async () => {
 Список Завдань:
 /addlesson - Добавити урок у свій список
 /lessons   - переглянути список твоїх уроків
+/rmlesson  - видалити предмет зі списку
 /addhw     - добавити в список домашнє завдання
 /hw        - переглянути список з домашнім завданням
 /done      - дозволяє відмітити завдання, як готове
@@ -108,6 +121,11 @@ const start = async () => {
 /creategroup - дозволяє створити групу
 /usegroup    - дозволяє уввійти в групу
 /leave       - дозволяє покинути групу
+
+Рішення:
+
+/addsol      - добавити рішення для певного завдання
+/sol         - переглянути всі рішення
         `))
 
         bot.command('creategroup', ctx => {
@@ -150,6 +168,35 @@ const start = async () => {
             } ).join('\n'))
             
         })
+        bot.command('creatett', async (ctx) => {
+            ctx.reply(`Ініціюю процес створення розкладу...`)
+            const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
+            ctx.reply(`Оберіть перший урок в понеділок (якщо його немає в списку то ви можете написати його за допомогою клавіатури, а я його сам добавлю у список)`, lessonsMenu)
+            appState.listenOf = TT_CREATE
+            appState.timetable = [1,1]
+        })
+        bot.command('next_day', ctx => {
+            let replyText = ''
+            for(const key in appState.timetableFilled){
+                replyText += TimeTableToDays[key-1]
+                replyText += `: \n ${appState.timetableFilled[key].join(';\n')}`
+            }
+            ctx.reply(replyText)
+            if(appState.timetable[0] <= 7){
+                ctx.reply(`Переходимо до наступного дня...`)
+                appState.timetable[0] += 1
+            }else{
+                ctx.reply("Cписок складено успішно!")
+                console.log(appState.timetableFilled)
+            }
+        
+        })
+        bot.command('rmlesson', async ( { reply, message } ) => {
+            const lessonsMenu = await getLessonsMenu(message.from.id)
+            reply("Який урок ви бажаєте видалити зі списку?", lessonsMenu)
+            appState.listenOf = LESSON_DELETE
+        })
+
         bot.command('addhw', async ctx => {
             const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
             ctx.reply("Ок тоді оберіть урок: ", lessonsMenu)
@@ -189,7 +236,6 @@ const start = async () => {
             const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
             const hwWithSolutions = hw.filter( hw_item => hw_item.solutions?.exist )
             let text = ''
-            console.log(hw)
 
             if(hwWithSolutions.length > 0){
                 hwWithSolutions.forEach( hw_item => {
@@ -317,14 +363,14 @@ const start = async () => {
                 break;
                 case CONFIRM_HW_DONE:
                     if(ctx.message.text == OK){
-                        const homework = await Homework.findOne({
+                        const homework = await Homework.find({
                             lesson: appState.lastLessonOfDone,
                             homework: appState.homeworkOfDone,
                             owner: ctx.message.from.id
                         })  
-                        homework.is_done = true
+                        homework.forEach( hw => hw.is_done = true)//is_done = true
                         try {
-                            await homework.save()
+                            await homework.forEach( hw => hw.save())
                         } catch (e) {
                             console.log(e. message)
                             ctx.reply("Не вдалось оновити завдання в базі даних, перевірте правильність написання")
@@ -393,14 +439,19 @@ const start = async () => {
 
                     }else{
                         ctx.reply('Невірний код')
-                        appState.listenOf = null
                     }
+                    appState.listenOf = null
                 break;
                 case SOLUTION:
-                    if(ctx.message.photo?.length !== 0 && ctx.message.photo){
+                    if(ctx.message.photo?.length !== 0 && ctx.message.photo  || ( ctx.message.document && ctx.message.document.file_id )){
                         //image 
                         const imageName = `${Math.floor(1000 * Math.random())}.jpg`
-                        const url = await ctx.telegram.getFileLink(ctx.message.photo[0].file_id)
+                        let url
+                        if(ctx.message.photo?.length !== 0 && ctx.message.photo){
+                            url = await ctx.telegram.getFileLink(ctx.message.photo[2].file_id)
+                        }else{
+                            url = await ctx.telegram.getFileLink(ctx.message.document.file_id)
+                        }
                         const response = await axios({url, responseType: 'stream'})
                         await new Promise((resolve, reject) => {
                             response.data.pipe(fs.createWriteStream(path.resolve(`./temp/images/${imageName}`)))
@@ -432,6 +483,7 @@ const start = async () => {
                         
                     }else{
                         //text
+                        console.log('text', ctx.message)
                         appState.solutionsTips.push(ctx.message.text)
                     }
                     const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
@@ -461,14 +513,13 @@ const start = async () => {
                             homework: appState.hwSolution,
                             owner: ctx.message.from.id
                         })  
-                        homework.solutions = {
+                        if(homework) homework.solutions = {
                             links: homework.solutions.links ? [...homework.solutions.links, ...appState.solutionsLinks]: [...appState.solutionsLinks],
                             tips:  homework.solutions.tips  ? [...homework.solutions.tips, ...appState.solutionsTips]  : [...appState.solutionsTips]
                         }
-                        homework.solutions.exist = true
+                        if(homework) homework.solutions.exist = true
 
                         try {
-                            console.log(homework)
                             await homework.save() 
                         } catch (e) {
                             console.log(e. message)
@@ -479,8 +530,50 @@ const start = async () => {
 
                     }else{
                         ctx.reply("Ок, відміняю останю дію")
-                        appState.listenOf = null
                     }
+                    appState.listenOf = null
+
+                break;
+                case LESSON_DELETE: 
+                    ctx.reply(`Ви впевнені що хочете видалити ${ctx.message.text}?`, confirmMenu)
+                    appState.lastLessonOfDelete = ctx.message.text
+                    appState.listenOf = LESSON_DELETE_CONFIRM
+                break;
+                case LESSON_DELETE_CONFIRM:
+                    if(ctx.message.text == OK){
+                        try {
+                            await Lesson.findOneAndDelete({
+                                lesson: appState.lastLessonOfDelete,
+                                owner: ctx.message.from.id
+                            })  
+                        } catch (e) {
+                            console.log(e. message)
+                            ctx.reply("Не вдалось видалити предмет, перевірте правильність написання")
+                            return
+                        }
+                        ctx.reply('Предмет видалено!')
+                        appState.listenOf = null
+                    }else{
+                        ctx.reply("Ок, відміняю останю дію")
+                        appState.listenOf = null
+                    } 
+                break;
+                case TT_CREATE:
+                    let  [day, number] = appState.timetable
+                    number += 1
+                    appState.timetable[1] = number
+                    const newLessonsMenu = await getLessonsMenu(ctx.message.from.id)
+                    ctx.reply(`Записав... (щоб перейти до наступного дня напишіть /next_day)`, newLessonsMenu)
+                    if(appState.timetableFilled && appState.timetableFilled[day]){
+                        appState.timetableFilled[day].push(ctx.message.text)
+                    } else{
+                        if(!appState.timetableFilled) appState.timetableFilled = {} 
+                        appState.timetableFilled[day] = [ctx.message.text]
+                        // Lesson.findAndModify({
+                        //     lesson: ctx.message.text, 
+                        //     owner: ctx.message.from.id
+                        // })//
+                    }    
                 break;
                 default:
                     ctx.reply("Я зараз чекаю команд!")
