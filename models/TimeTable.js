@@ -2,7 +2,7 @@ const { Schema, model, Types } = require ('mongoose')
 
 const shema = new Schema({
     lessons: {
-        type: Array,
+        type: Object,
         required: true
     },
     owner: {

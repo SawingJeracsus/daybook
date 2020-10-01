@@ -10,7 +10,9 @@ const Lesson = require('./models/Lesson')
 const Homework = require('./models/Homework')
 const Group = require('./models/Group')
 const User = require('./models/User');
-const c = require('config');
+const TimeTable = require('./models/TimeTable');
+const { time } = require('console');
+// const c = require('config');
 // const { text } = require('express')
 const PORT = config.get('port')
 imgur.setClientId('dd7aa97e9e366db');
@@ -176,39 +178,124 @@ const start = async () => {
             appState.timetableFilled = {}
             appState.timetable = [1,1]
         })
-        bot.command('next_day', ctx => {
+        bot.command('next_day', async ctx => {
             // appState.listenOf  = null
             if(appState.listenOf === TT_CREATE){
                 let replyText = ''
                 console.log(appState.timetableFilled)
                 for(const key in appState.timetableFilled){
-                    replyText += TimeTableToDays[key-1]
+                    replyText += '\n'+TimeTableToDays[key-1]
                     replyText += `: \n ${appState.timetableFilled[key].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
                 }
                 ctx.reply(replyText)
                 if(appState.timetable[0] <= 7){
                     ctx.reply(`Переходимо до наступного дня...`)
                     appState.timetable[0] += 1
+                    appState.timetable[1] = 1
                 }else{
-                    ctx.reply("Cписок складено успішно!")
-                    console.log(appState.timetableFilled)
+                    // ctx.reply("Cписок складено успішно!")
+                    const timetable = new TimeTable({
+                        lessons: appState.timetableFilled,
+                        owner: ctx.message.from.id
+                    })
+                    try {
+                        await timetable.save()
+                        ctx.reply('Список збережено успішно!')//
+                    } catch (e) {
+                        ctx.reply("Не вдалось зберегти список в базу даних")                        
+                        console.log(e, e.message)
+                    }
+                    appState.timetableFilled = {}
+                    appState.timetable = null
                 }
             }else{
                 ctx.reply('Проініціалізуйте спочатку процес створення (/creatett)')
             }
         
         })
+        bot.command('tt', async ctx => {
+            ctx.reply('Завантажую...')
+            let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
+            timeTable = timeTable['lessons']
+            let replyText = ''
+                for(const key in timeTable){
+                    replyText += '\n'+TimeTableToDays[key-1]
+                    replyText += `: \n ${timeTable[key].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+                }
+                ctx.reply(replyText)
+        })
+        bot.command('ttd', async ctx => {
+            ctx.reply('Завантажую...')
+            let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
+            timeTable = timeTable['lessons']
+            const date = new Date()
+            let replyText = ''
+            replyText += '\n'+TimeTableToDays[date.getDay()-1]
+            replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+
+            ctx.reply(replyText)
+        })
+        bot.command('ttt', async ctx => {
+            ctx.reply('Завантажую...')
+            let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
+            timeTable = timeTable['lessons']
+            const date = new Date()
+            let replyText = ''
+            replyText += '\n'+TimeTableToDays[date.getDay()]
+            replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+
+            ctx.reply(replyText)
+        })
+        
         bot.command('rmlesson', async ( { reply, message } ) => {
             const lessonsMenu = await getLessonsMenu(message.from.id)
             reply("Який урок ви бажаєте видалити зі списку❓", lessonsMenu)
             appState.listenOf = LESSON_DELETE
         })
-
+        
         bot.command('addhw', async ctx => {
             const lessonsMenu = await getLessonsMenu(ctx.message.from.id)
             ctx.reply("Ок тоді оберіть урок: ", lessonsMenu)
 
             appState.listenOf = LESSON_HW
+        })
+        bot.command('tthw', async ctx => {
+            ctx.reply('Завантажую...')
+            let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
+            const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
+
+            timeTable = timeTable['lessons']
+            const date = new Date()
+            let replyText = ''
+            replyText += '\n'+TimeTableToDays[date.getDay()]
+            replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
+                if(hw_item.lesson == lesson){
+                    return hw_item.homework
+                }
+            }).filter(el => {
+                return el != null && el != '';
+              }).join(';') } ` ).join(';\n')}`
+
+            ctx.reply(replyText)
+        })
+        bot.command('ttdhw', async ctx => {
+            ctx.reply('Завантажую...')
+            let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
+            const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
+
+            timeTable = timeTable['lessons']
+            const date = new Date()
+            let replyText = ''
+            replyText += '\n'+TimeTableToDays[date.getDay()-1]
+            replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
+                if(hw_item.lesson == lesson){
+                    return hw_item.homework
+                }
+            }).filter(el => {
+                return el != null && el != '';
+              }).join(';') } ` ).join(';\n')}`
+
+            ctx.reply(replyText)
         })
         bot.command('hw', async ctx => {
             const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
@@ -579,9 +666,10 @@ const start = async () => {
                     let  [day, number] = appState.timetable
                     number += 1
                     appState.timetable[1] = number
+                    // const newLessonsMenu = await getLessonsMenu(ctx.message.from.id)
 
-                    ctx.reply(number)
                     const [newLessonsMenu, lessons] = await getLessonsMenu(ctx.message.from.id, true)
+                    ctx.reply(number, newLessonsMenu)
                     appState.timetableFilled[day] = appState.timetableFilled[day] ? [...appState.timetableFilled[day], ctx.message.text] : [ctx.message.text] 
                     let includes = false
                     lessons.forEach(lesson => {
@@ -590,14 +678,13 @@ const start = async () => {
                         }
                     })
                     if(!includes){
+
                         const lesson = new Lesson({
                             lesson: ctx.message.text,
                             owner:  ctx.message.from.id
                         })
-                        console.log(lessons, includes, ctx.message.text)
                         lesson.save()
                     }
-                    // const newLessonsMenu = await getLessonsMenu(ctx.message.from.id)
                     // ctx.reply(`Записав... (щоб перейти до наступного дня напишіть /next_day)`, newLessonsMenu)
                     // if(appState.timetableFilled && appState.timetableFilled[day]){
                     //     appState.timetableFilled[day].push(ctx.message.text)
