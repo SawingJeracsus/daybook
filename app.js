@@ -227,12 +227,13 @@ const start = async () => {
         bot.command('ttd', async ctx => {
             ctx.reply('Завантажую...')
             let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
+            console.log()
             if(timeTable){
                 timeTable = timeTable['lessons']
                 const date = new Date()
                 let replyText = ''
                 replyText += '\n'+TimeTableToDays[date.getDay()-1]
-                replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+                replyText += `: \n ${timeTable[date.getDay()]?.map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}` || 'Нічого)'
 
                 ctx.reply(replyText)
             }else{
@@ -247,7 +248,7 @@ const start = async () => {
                 const date = new Date()
                 let replyText = ''
                 replyText += '\n'+TimeTableToDays[date.getDay()]
-                replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+                replyText += `: \n ${timeTable[date.getDay()+1]?.map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}` || 'Нічого)'
 
                 ctx.reply(replyText)
             } else{
@@ -278,13 +279,13 @@ const start = async () => {
                 const date = new Date()
                 let replyText = ''
                 replyText += '\n'+TimeTableToDays[date.getDay()]
-                replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
+                replyText += `: \n ${timeTable[date.getDay()+1]?.map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
                     if(hw_item.lesson == lesson){
                         return hw_item.homework
                     }
                 }).filter(el => {
                     return el != null && el != '';
-                }).join(';') } ` ).join(';\n')}`
+                }).join(';') } ` ).join(';\n')}` || 'Нічого)'
 
                 ctx.reply(replyText)
             }else{
@@ -301,13 +302,13 @@ const start = async () => {
                 const date = new Date()
                 let replyText = ''
                 replyText += '\n'+TimeTableToDays[date.getDay()-1]
-                replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
+                replyText += `: \n ${timeTable[date.getDay()]?.map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
                     if(hw_item.lesson == lesson){
                         return hw_item.homework
                     }
                 }).filter(el => {
                     return el != null && el != '';
-                }).join(';') } ` ).join(';\n')}`
+                }).join(';') } ` ).join(';\n')}` || 'Нічого)'
 
                 ctx.reply(replyText)
             }else{
