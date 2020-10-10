@@ -227,24 +227,33 @@ const start = async () => {
         bot.command('ttd', async ctx => {
             ctx.reply('Завантажую...')
             let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
-            timeTable = timeTable['lessons']
-            const date = new Date()
-            let replyText = ''
-            replyText += '\n'+TimeTableToDays[date.getDay()-1]
-            replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+            if(timeTable){
+                timeTable = timeTable['lessons']
+                const date = new Date()
+                let replyText = ''
+                replyText += '\n'+TimeTableToDays[date.getDay()-1]
+                replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
 
-            ctx.reply(replyText)
+                ctx.reply(replyText)
+            }else{
+                ctx.reply('Сьогодні ніяких уроків!')
+            }
         })
         bot.command('ttt', async ctx => {
             ctx.reply('Завантажую...')
             let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
-            timeTable = timeTable['lessons']
-            const date = new Date()
-            let replyText = ''
-            replyText += '\n'+TimeTableToDays[date.getDay()]
-            replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
+            if(timeTable){
+                timeTable = timeTable['lessons']
+                const date = new Date()
+                let replyText = ''
+                replyText += '\n'+TimeTableToDays[date.getDay()]
+                replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson}` ).join(';\n')}`
 
-            ctx.reply(replyText)
+                ctx.reply(replyText)
+            } else{
+                ctx.reply("Завтра ніяких уроків!")
+            }
+
         })
         
         bot.command('rmlesson', async ( { reply, message } ) => {
@@ -262,41 +271,50 @@ const start = async () => {
         bot.command('tthw', async ctx => {
             ctx.reply('Завантажую...')
             let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
-            const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
+            if(timeTable){
+                const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
 
-            timeTable = timeTable['lessons']
-            const date = new Date()
-            let replyText = ''
-            replyText += '\n'+TimeTableToDays[date.getDay()]
-            replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
-                if(hw_item.lesson == lesson){
-                    return hw_item.homework
-                }
-            }).filter(el => {
-                return el != null && el != '';
-              }).join(';') } ` ).join(';\n')}`
+                timeTable = timeTable['lessons']
+                const date = new Date()
+                let replyText = ''
+                replyText += '\n'+TimeTableToDays[date.getDay()]
+                replyText += `: \n ${timeTable[date.getDay()+1].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
+                    if(hw_item.lesson == lesson){
+                        return hw_item.homework
+                    }
+                }).filter(el => {
+                    return el != null && el != '';
+                }).join(';') } ` ).join(';\n')}`
 
-            ctx.reply(replyText)
+                ctx.reply(replyText)
+            }else{
+                ctx.reply('Ніякого домашнього на завтра!!!')
+            }
         })
         bot.command('ttdhw', async ctx => {
             ctx.reply('Завантажую...')
             let timeTable = await TimeTable.findOne({owner: ctx.message.from.id})
-            const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
+            if(timeTable){
+                const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
 
-            timeTable = timeTable['lessons']
-            const date = new Date()
-            let replyText = ''
-            replyText += '\n'+TimeTableToDays[date.getDay()-1]
-            replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
-                if(hw_item.lesson == lesson){
-                    return hw_item.homework
-                }
-            }).filter(el => {
-                return el != null && el != '';
-              }).join(';') } ` ).join(';\n')}`
+                timeTable = timeTable['lessons']
+                const date = new Date()
+                let replyText = ''
+                replyText += '\n'+TimeTableToDays[date.getDay()-1]
+                replyText += `: \n ${timeTable[date.getDay()].map((lesson, i) => `${i+1}. ${lesson} : ${hw.map(hw_item => {
+                    if(hw_item.lesson == lesson){
+                        return hw_item.homework
+                    }
+                }).filter(el => {
+                    return el != null && el != '';
+                }).join(';') } ` ).join(';\n')}`
 
-            ctx.reply(replyText)
+                ctx.reply(replyText)
+            }else{
+                ctx.reply('Ніякого домашнього на сьогодні!!!')
+            }
         })
+
         bot.command('hw', async ctx => {
             const hw = await Homework.find({ owner: ctx.message.from.id, is_done: false })
             
